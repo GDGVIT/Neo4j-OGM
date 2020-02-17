@@ -1,18 +1,19 @@
-package lucyErr
+package lucy
 
 const (
-	EmptyQueue             = iota
-	UnsatisfiedDependency  = iota
-	CorruptedQueryChain    = iota
-	ExpressionExpected     = iota
-	UnrecognizedExpression = iota
-	QueryInjection         = iota
+	EmptyQueue = iota
+	UnsatisfiedDependency
+	CorruptedQueryChain
+	ExpressionExpected
+	UnrecognizedExpression
+	QueryInjection
+	NoRecordsFound
 )
 
 const (
-	NoSeverity   = iota
-	LowSeverity  = iota
-	HighSeverity = iota
+	NoSeverity = iota
+	LowSeverity
+	HighSeverity
 )
 
 var (
@@ -35,6 +36,7 @@ func (e *LucyErrors) Init() *LucyErrors {
 		ExpressionExpected:     "lucy: expression expected in parameter",
 		UnrecognizedExpression: "lucy: expression not recognized",
 		QueryInjection:         "lucy: query injection detected",
+		NoRecordsFound:         "lucy: No records found",
 	}
 	return e
 }
@@ -42,7 +44,7 @@ func (e *LucyErrors) Init() *LucyErrors {
 func (e *LucyErrors) Error() string {
 	errStr := e.errorMap[e.Code]
 	if len(e.Data) > 0 {
-		return errStr + " " + e.Data
+		return errStr + " [" + e.Data + "]"
 	}
 	return errStr
 }
@@ -65,8 +67,8 @@ type InjectionSeverity struct {
 
 func (s *InjectionSeverity) Init() *InjectionSeverity {
 	s.sevMap = map[uint]string{
-		HighSeverity: "(severity: high)",
-		LowSeverity:  "(severity: low)",
+		HighSeverity: "severity: high",
+		LowSeverity:  "severity: low",
 		NoSeverity:   "",
 	}
 	return s
