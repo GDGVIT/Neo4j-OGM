@@ -8,6 +8,9 @@ const (
 	UnrecognizedExpression
 	QueryInjection
 	NoRecordsFound
+	ExpectedStructNotSlice
+	ArgumentMismatch
+	InvalidOperation
 )
 
 const (
@@ -37,6 +40,9 @@ func (e *LucyErrors) Init() *LucyErrors {
 		UnrecognizedExpression: "lucy: expression not recognized",
 		QueryInjection:         "lucy: query injection detected",
 		NoRecordsFound:         "lucy: No records found",
+		ExpectedStructNotSlice: "lucy: Expected struct but found slice",
+		ArgumentMismatch:       "lucy: Argument mismatch",
+		InvalidOperation:       "lucy: Invalid operation",
 	}
 	return e
 }

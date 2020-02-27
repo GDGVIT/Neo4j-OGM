@@ -2,6 +2,7 @@ package lucy
 
 import (
 	"fmt"
+	"github.com/supercmmetry/lucy/types"
 	"reflect"
 )
 
@@ -37,6 +38,11 @@ type QueryRuntime interface {
 	Compile(cradle *QueryCradle) (string, error)
 	Execute(query string, cradle *QueryCradle, target interface{}) error
 	Close() error
+	Commit() error
+	Rollback() error
+	BeginTransaction() error
+	CloseTransaction() error
+	Clone() QueryRuntime
 }
 
 /*
@@ -153,12 +159,8 @@ func (q *QueryEngine) Sync() error {
 			cradle.Exps.Push(param)
 			cradle.Ops.Push(cradle.family)
 
-
 			break
 		case SetTarget:
-			if _, ok := q.cradle.deps[Where]; !ok {
-				return Error(UnsatisfiedDependency, "missing: Where()")
-			}
 
 			cradle.Ops.Push(SetTarget)
 			cradle.Out = qr.Output
@@ -166,15 +168,10 @@ func (q *QueryEngine) Sync() error {
 			cradle.AllowEmptyResult = false
 
 			break
-		case MiscNodeName:
-			cradle.Ops.Push(MiscNodeName)
-			cradle.Exps.Push(qr.Params)
-			cradle.deps[MiscNodeName] = struct{}{}
-			break
 		case Creation:
 			cradle.Ops.Push(cradle.family)
 
-			exp := qr.Params.(Exp)
+			exp := qr.Params.(types.Exp)
 			for k, v := range exp {
 				exp[k] = Format("?", v)
 			}
@@ -195,7 +192,7 @@ func (q *QueryEngine) Sync() error {
 
 			cradle.Ops.Push(cradle.family)
 
-			exp := qr.Params.(Exp)
+			exp := qr.Params.(types.Exp)
 			for k, v := range exp {
 				exp[k] = Format("?", v)
 			}
@@ -241,6 +238,46 @@ func (q *QueryEngine) Sync() error {
 			}
 
 			cradle.Ops.Push(cradle.family)
+			break
+		case RelationX:
+			// nuke existing multi-target.
+			cradle.Out = nil
+
+			cradle.Ops.Push(cradle.family)
+			cradle.Exps.Push(qr.Params)
+			cradle.deps[RelationX] = struct{}{}
+			break
+		case RelationY:
+			if _, ok := cradle.deps[RelationX]; !ok {
+				return Error(UnsatisfiedDependency, "missing: Relate()")
+			}
+
+			cradle.Ops.Push(cradle.family)
+			cradle.Exps.Push(qr.Params)
+			cradle.deps[RelationY] = struct{}{}
+			break
+		case By:
+			if _, ok := cradle.deps[RelationY]; !ok {
+				return Error(UnsatisfiedDependency, "missing: To()")
+			}
+
+			cradle.Ops.Push(cradle.family)
+			cradle.Exps.Push(qr.Params)
+			break
+
+		case MTRelation:
+
+			// Use Relation() only after Find()
+			if q.cradle.Out == nil {
+				return Error(UnsatisfiedDependency, "missing: Find()")
+			}
+
+			cradle.Ops.Push(cradle.family)
+
+			exp := qr.Params.(types.Exp)
+			exp["out"] = cradle.Out
+			cradle.Exps.Push(exp)
+
 			break
 		}
 

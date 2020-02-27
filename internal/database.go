@@ -1,10 +1,12 @@
 package lucy
 
-import "reflect"
+import (
+	"github.com/supercmmetry/lucy/types"
+	"reflect"
+)
 
 type Layer interface {
 	AttachTo(l *Database)
-	StartTransaction()
 	Sync() error
 	AddRuntime(rt QueryRuntime)
 	GetRuntime() QueryRuntime
@@ -12,9 +14,10 @@ type Layer interface {
 }
 
 type Database struct {
-	Queue Queue
-	Error error
-	layer Layer
+	Queue         Queue
+	Error         error
+	layer         Layer
+	isTransaction bool
 }
 
 func (l *Database) addQuery(query Query) {
@@ -97,16 +100,6 @@ func (l *Database) Or(I_ interface{}, I ...interface{}) *Database {
 	return l
 }
 
-func (l *Database) By(name string) *Database {
-	if l.Error != nil {
-		return l
-	}
-
-	l.addQuery(Query{FamilyType: MiscNodeName, Params: name})
-
-	return l
-}
-
 func (l *Database) Set(I_ interface{}, I ...interface{}) *Database {
 	if l.Error != nil {
 		return l
@@ -154,12 +147,99 @@ func (l *Database) Delete() *Database {
 	return l
 }
 
-func (l *Database) Begin() *Database {
-	l.layer.StartTransaction()
+func (l *Database) Relate(I interface{}) *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.addQuery(Query{FamilyType: RelationX, Params: I})
+	return l
+}
+
+func (l *Database) To(I interface{}) *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.addQuery(Query{FamilyType: RelationY, Params: I})
+	return l
+}
+
+func (l *Database) By(relName string, I ... interface{}) *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.addQuery(Query{FamilyType: By, Params: types.Exp{"relation": relName, "params": I}})
+	l.Error = l.layer.Sync()
+
+	return l
+}
+
+func (l *Database) Relation(relName string, I ...interface{}) *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.addQuery(Query{FamilyType: MTRelation, Params: types.Exp{"relation": relName, "params": I}})
+
 	return l
 }
 
 func (l *Database) Close() *Database {
-	l.Error = l.layer.GetRuntime().Close()
+	if l.isTransaction {
+		l.Error = l.layer.GetRuntime().CloseTransaction()
+		if l.Error == nil {
+			l.isTransaction = false
+		}
+	} else {
+		l.Error = l.layer.GetRuntime().Close()
+	}
 	return l
+}
+
+func (l *Database) Commit() *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.Error = l.layer.GetRuntime().Commit()
+	if l.isTransaction {
+		l.Error = l.layer.GetRuntime().CloseTransaction()
+		if l.Error == nil {
+			l.isTransaction = false
+		}
+	}
+
+	return l
+}
+
+func (l *Database) Rollback() *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	l.Error = l.layer.GetRuntime().Rollback()
+	if l.isTransaction {
+		l.Error = l.layer.GetRuntime().CloseTransaction()
+		if l.Error == nil {
+			l.isTransaction = false
+		}
+	}
+	return l
+}
+
+func (l *Database) Begin() *Database {
+	if l.Error != nil {
+		return l
+	}
+
+	engine := (&QueryEngine{}).NewQueryEngine()
+	db := &Database{}
+	engine.AttachTo(db)
+	db.AddRuntime(l.layer.GetRuntime().Clone())
+	db.isTransaction = true
+	l.Error = db.layer.GetRuntime().BeginTransaction()
+
+	return db
 }
